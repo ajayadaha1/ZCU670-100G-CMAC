@@ -1,0 +1,16 @@
+#Note: Mention Each package in individual line
+#These packages will get added into rootfs menu entry
+
+CONFIG_gpio-demo
+CONFIG_peekpoke
+CONFIG_librfdc
+CONFIG_rfdc-read-write
+CONFIG_rfdc-selftest
+CONFIG_librfclk
+CONFIG_python3-pyro4
+CONFIG_python3-cffi
+CONFIG_libdfeccf
+CONFIG_libdfeequ
+CONFIG_libdfemix
+CONFIG_libdfeprach
+CONFIG_libdfeofdm

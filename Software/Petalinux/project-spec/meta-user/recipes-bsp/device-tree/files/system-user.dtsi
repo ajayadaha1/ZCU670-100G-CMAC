@@ -1,0 +1,71 @@
+/include/ "system-conf.dtsi"
+/ {
+};
+
+&i2c1{
+        status = "okay";
+
+        i2c-mux@74 {
+                compatible = "nxp,pca9548"; /* u20 */
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x74>;               
+                
+                i2c@3 {
+                                #address-cells = <1>;
+                                #size-cells = <0>;
+                                reg = <3>;
+                                
+                                clock-generator@5d { /* USER MGT SI570 - u48 */
+                                        #clock-cells = <0>;
+                                        compatible = "silabs,si570";
+                                        reg = <0x5d>;
+                                        temperature-stability = <50>;
+                                        factory-fout = <156250000>;
+                                        clock-frequency = <156250000>;
+                                        clock-output-names = "si570_mgt";
+                                };
+                        };
+
+                };
+};
+
+&cmac_axi_mcdma_0 { 
+        compatible = "xlnx,eth-dma";
+        xlnx,addrwidth = <0x20>;
+        xlnx,channel-ids = "1";
+        xlnx,include-dre;
+        xlnx,include-sg;
+};
+
+&cmac_cmac_usplus_0 {
+        compatible = "xlnx,cmac-usplus-2.4";
+        axistream-connected = <&cmac_axi_mcdma_0>;
+	axigpio-handle = <&cmac_axi_gpio_0>;
+        xlnx,channel-ids = "1";
+        local-mac-address = [00 0a 35 00 00 01];
+        xlnx,rx-pause-da-mcast = <0x0> ;
+        xlnx,tx-da-gpp = <0x0>;
+        xlnx,tx-da-ppp = <0x0>;
+        xlnx,include-dre;
+        interrupts = < 0 89 4 0 90 4 >;
+        interrupt-names = "mm2s_ch1_introut" , "s2mm_ch1_introut";
+        interrupt-parent = <&gic>;
+        xlnx,num-queues = /bits/ 16 <0x1>;
+        xlnx,addrwidth = <0x20>;
+        clocks = <&zynqmp_clk 71>, <&misc_clk_0>, <&zynqmp_clk 71>;
+        clock-names = "s_axi_aclk", "rx_core_clk", "dclk";
+        phy-handle = <&fixed_link_100g>;
+        phy-mode = "100gbase-cr4";
+        fixed_link_100g: fixed-link {
+                compatible = "fixed-link";
+                speed = <100000>;
+                full-duplex;
+        };
+};
+
+
+&cmac_axi_gpio_0 {
+	compatible = "xlnx,axi-gpio-2.0";
+};
+
