@@ -57,8 +57,8 @@ save_bd_design
 close_bd_design ${project_name}
 
 # If using UI, uncomment these two lines:
-file mkdir ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/ui
-file copy -force ${ui_name} ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/ui/${ui_name}
+#file mkdir ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/ui
+#file copy -force ${ui_name} ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/ui/${ui_name}
 
 open_bd_design ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/${project_name}.bd
 set_property synth_checkpoint_mode None [get_files ${proj_dir}/${project_name}.srcs/sources_1/bd/${project_name}/${project_name}.bd]
