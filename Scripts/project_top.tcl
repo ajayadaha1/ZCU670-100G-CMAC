@@ -34,7 +34,7 @@ set_property board_part xilinx.com:zcu670:part0:2.0 [current_project]
 
 
 # Source the BD file, BD naming convention is project_bd.tcl
-source pl_eth_100g_bd.tcl.tcl
+source pl_eth_100g_bd.tcl
 
 #Set the path to the constraints file:
 set impl_const ../Hardware/constraints/constraints.xdc
