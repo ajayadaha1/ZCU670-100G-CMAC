@@ -1,4 +1,4 @@
-# ZCU670 100G CAUI-4 v2024.2
+# ZCU670 100G CAUI-4 v2024.2 With RS-FEC Enabled
 
 ## **Design Summary**
 
@@ -13,7 +13,7 @@ This project utilizes AXI 10G/25G Ethernet Subsystem configured for 10GBASE-R. T
 
 - ZCU670
 - 4xSFP supporting 100G CAUI-4
-- 100G capable link partner
+- 100G capable link partner with RS-FEC enabled
 
 ---
 
