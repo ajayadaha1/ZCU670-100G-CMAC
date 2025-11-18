@@ -58,6 +58,14 @@ Once packaged, the `BOOT.bin` and `image.ub` files (in the `PetaLinux/images/lin
  - `end0` -> 1G
  - `eth0` -> 100G
 ```
+xilinx-zcu670-20242:/home/petalinux# ifconfig eth0 192.168.1.1
+xilinx-zcu670-20242:/home/petalinux# ping -A -q -w 3 -I eth0 192.168.1.2
+PING 192.168.1.2 (192.168.1.2): 56 data bytes
+
+--- 192.168.1.2 ping statistics ---
+52704 packets transmitted, 52704 packets received, 0% packet loss
+round-trip min/avg/max = 0.044/0.056/0.537 ms
+
 ```
 ### **Performance:**
 **NOTE:** These are rough performance numbers - your actual performance may vary based on a variety of factors such as network topology and kernel load.
