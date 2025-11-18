@@ -1,4 +1,4 @@
-# ZCU670 100G CAUI-4 v2024.2 With RS-FEC Enabled
+# ZCU670 100G CAUI-4 v2024.2 With RS-FEC Disabled
 
 ## **Design Summary**
 
