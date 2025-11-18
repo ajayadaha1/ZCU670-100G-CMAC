@@ -1,3 +1,22 @@
+From f9c6c2c88585732c404f41ca4b649a19bfa5803b Mon Sep 17 00:00:00 2001
+From: Ajaya Dahal <ajayad@amd.com>
+Date: Mon, 17 Nov 2025 21:56:39 -0800
+Subject: [PATCH] 100G-CMAC-driver-patch-without-RS-FEC
+
+---
+ drivers/net/ethernet/xilinx/Kconfig           |    9 -
+ drivers/net/ethernet/xilinx/Makefile          |    1 -
+ drivers/net/ethernet/xilinx/xilinx_axienet.h  |  377 ++++--
+ .../net/ethernet/xilinx/xilinx_axienet_dma.c  |   16 +-
+ .../net/ethernet/xilinx/xilinx_axienet_main.c | 1176 +++++------------
+ .../ethernet/xilinx/xilinx_axienet_mcdma.c    |   69 +-
+ .../net/ethernet/xilinx/xilinx_axienet_mdio.c |   23 +-
+ 7 files changed, 666 insertions(+), 1005 deletions(-)
+ mode change 100644 => 100755 drivers/net/ethernet/xilinx/xilinx_axienet.h
+ mode change 100644 => 100755 drivers/net/ethernet/xilinx/xilinx_axienet_dma.c
+ mode change 100644 => 100755 drivers/net/ethernet/xilinx/xilinx_axienet_main.c
+ mode change 100644 => 100755 drivers/net/ethernet/xilinx/xilinx_axienet_mcdma.c
+
 diff --git a/drivers/net/ethernet/xilinx/Kconfig b/drivers/net/ethernet/xilinx/Kconfig
 index d77aca5bb683..f9599edcc053 100644
 --- a/drivers/net/ethernet/xilinx/Kconfig
@@ -28,7 +47,9 @@ index 12f86dcf8912..6eed81e78458 100644
  obj-$(CONFIG_AXIENET_HAS_MCDMA) += xilinx_axienet_mcdma.o
 -obj-$(CONFIG_XILINX_AXI_EOE) += xilinx_axienet_eoe.o
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet.h b/drivers/net/ethernet/xilinx/xilinx_axienet.h
-index d51d8ce828ba..96704e508baa 100755
+old mode 100644
+new mode 100755
+index 834b05beaafe..96704e508baa
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet.h
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet.h
 @@ -407,29 +407,18 @@
@@ -152,15 +173,25 @@ index d51d8ce828ba..96704e508baa 100755
  } __aligned(XAXIDMA_BD_MINIMUM_ALIGNMENT);
  
  #define XAE_NUM_MISC_CLOCKS 3
-@@ -820,15 +746,11 @@ struct aximcdma_bd {
- #define GPIO_INT_CHN1_MASK	BIT(0)
- #define GPIO_GLOBAL_INT_MASK	BIT(31)
- #define AXI_GPIO_INT		"axigpio"
+@@ -811,16 +737,20 @@ struct aximcdma_bd {
+ #else
+ #define XAE_MAX_QUEUES		1
+ #endif
+-
 -struct ethtool_rx_fs_list {
 -	struct list_head list;
 -	unsigned int count;
 -};
 -
++/*CMAC 100G AXI-GPIO interrupt for link status notification*/
++#define GPIO_CHN1_DATA_REG	0x0
++#define GPIO_CHN1_TRI_REG	0x4
++#define GPIO_GLOBAL_INT_EN_REG	0x11c
++#define GPIO_INT_EN_REG		0x128
++#define GPIO_INT_STS_REG	0x120
++#define GPIO_INT_CHN1_MASK	BIT(0)
++#define GPIO_GLOBAL_INT_MASK	BIT(31)
++#define AXI_GPIO_INT		"axigpio"
  /**
   * struct axienet_local - axienet private per device data
   * @ndev:	Pointer for net_device to which it will be attached.
@@ -169,7 +200,7 @@ index d51d8ce828ba..96704e508baa 100755
   * @phylink:	Pointer to phylink instance
   * @phylink_config: phylink configuration settings
   * @pcs_phy:	Reference to PCS/PMA PHY if used
-@@ -886,24 +808,13 @@ struct ethtool_rx_fs_list {
+@@ -878,24 +808,13 @@ struct ethtool_rx_fs_list {
   * @weight:   MCDMA Channel weight value to be configured for.
   * @dma_mask: Specify the width of the DMA address space.
   * @usxgmii_rate: USXGMII PHY speed.
@@ -196,7 +227,7 @@ index d51d8ce828ba..96704e508baa 100755
   */
  struct axienet_local {
  	struct net_device *ndev;
-@@ -984,24 +895,15 @@ struct axienet_local {
+@@ -976,24 +895,15 @@ struct axienet_local {
  	u8 dma_mask;
  	u32 usxgmii_rate;
  
@@ -225,10 +256,252 @@ index d51d8ce828ba..96704e508baa 100755
  };
  
  /**
-@@ -1321,24 +1223,26 @@ struct axienet_dma_q {
+@@ -1071,24 +981,268 @@ struct axienet_dma_q {
+ #define AXIENET_TX_SSTATS_LEN(lp) ((lp)->num_tx_queues * 2)
+ #define AXIENET_RX_SSTATS_LEN(lp) ((lp)->num_rx_queues * 2)
  
- #define XCMAC_RSFEC_INDI_ENABLE 0x7
- #define XCMAC_RSFEC_ENABLE      0x3
++#define XCMAC_CONFIG_REG_BASE            0x00000000
++
++/* Register offset wrt the XMAC_CONFIG_REG_BASE */
++#define XCMAC_GT_RESET_REG_OFFSET              0x00000000 /** GT Reset Rgister */
++#define XCMAC_GT_RESET_ALL_MASK                0x00000001 /** Bit[0] will issue a reset to the GT. This bit is clear on write */
++
++#define XCMAC_RESET_REG_OFFSET                 0x00000004 /** Reset Register */
++#define XCMAC_TX_CORE_RESET_MASK               0x80000000 /** Bit[31] will issue a reset to the TX core */
++#define XCMAC_RX_CORE_RESET_MASK               0x40000000 /** Bit [30] will issue a reset to the RX core */
++#define XCMAC_OUT_OF_RESET                     0x00000000
++
++#define XCMAC_MODE_REG_OFFSET                  0x00000008 /** Mode register. Bit[0] when set to 1 puts the 100GE PCS in CAU14 mode, when set to 0 puts the 100GE PCS in CAU10 mode */
++
++#define XCMAC_CONFIG_TX_REG1_OFFSET            0x0000000C /** Configuration TX register 1 */
++#define XCMAC_CONFIG_TX_REG1_ENABLE_MASK       0x00000001
++#define XCMAC_CONFIG_TX_REG1_SEND_RFI_MASK     0x00000010
++#define XCMAC_CONFIG_TX_REG1_SEND_IDLE_MASK    0x00000020
++#define XCMAC_CONFIG_TX_REG1_TEST_PATTER_MASK  0x00010000
++
++//0x0010       Reserved
++
++#define XCMAC_CONFIG_RX_REG1_OFFSET            0x00000014 /** Configuration RX register 1 */
++#define XCMAC_CONFIG_RX_REG1_ENABLE_MASK       0x00000001
++#define XCMAC_CONFIG_RX_REG1_FORCE_RESYNC_MASK 0x00000080
++#define XCMAC_CONFIG_RX_REG1_TEST_PATTERN_MASK 0X00000100
++
++//0x001C - 0x0020        Reserved
++
++//moved in the 16.1
++#define XCMAC_CORE_VERSION_REG_OFFSET          0x00000024 /** Core version register */
++#define XCMAC_CORE_VERSION_REG_MINOR_MASK      0x000000FF
++#define XCMAC_CORE_VERSION_REG_MAJOR_MASK      0x0000FF00
++
++//0x0028        Reserved
++#define XCMAC_CONFIG_TX_BIP_OVERRIDE                   0x0000002C /** Value to override the bip7 byte of the PCS lane 0. */
++#define XCMAC_CONFIG_TX_BIP_OVERRIDE_LANE0_VLM_BIP7_OVERRIDE MASK 0x00000010
++
++/* RX Flow control control REG1 value as per PG - Core Bring Up Sequence. */
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_CONTROL_REG1      0x00000030 /** The flow control register enables the orrsponding signals to the pause and priority pause frames reception. */
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_CONTROL_REG1_VAL  0x000001FF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG1      0x00000034
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG1_VAL  0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG2      0x00000038
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG2_VAL  0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG3      0x0000003C
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG3_VAL  0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG4      0x00000040
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG4_VAL  0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG5      0x00000044
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG5_VAL  0x0000FFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG1       0x00000048
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG1_VAL   0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG2       0x0000004C
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG2_VAL   0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG3       0x00000050
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG3_VAL   0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG4       0x00000054
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG4_VAL   0xFFFFFFFF
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG5       0x00000058
++#define XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG5_VAL   0x0000FFFF
++//0x005C - 0x0080      Reserved
++
++#define XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG1      0x00000084 /** RX Flow control control register 1. */
++#define XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG1_VAL  0x00003DFF
++#define XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG2      0x00000088 /** RX Flow control control register 2.*/
++#define XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG2_VAL  0x0001C631
++//0x008C - 0x01FF      Reserved
++
++/* Status and Statistics Register Map */
++#define XCMAC_STAT_TX_STATUS_REG_OFFSET                0x00000200 /** TX Status register */
++#define XCMAC_STAT_RX_STATUS_REG_OFFSET                0x00000204 /** RX Status register */
++#define XCMAC_STAT_RX_STATUS_REG_STATUS_MASK           0x00000001
++#define XCMAC_STAT_RX_STATUS_REG_ALIGNED_MASK          0x00000002
++#define XCMAC_STAT_RX_STATUS_REG_MIS_ALIGNED_MASK      0x00000004
++#define XCMAC_STAT_RX_STATUS_REG_ALIGNED_ERR_MASK      0x00000008
++#define XCMAC_STAT_RX_STATUS_REG_HI_BER_MASK           0x00000010
++#define XCMAC_STAT_RX_STATUS_REG_REMOTE_FAULT_MASK     0x00000020
++#define XCMAC_STAT_RX_STATUS_REG_LOCAL_FAULT_MASK      0x00000040
++#define XCMAC_STAT_RX_STATUS_REG_INTERNAL_LOCAL_FAULT_MASK   0x00000080
++#define XCMAC_STAT_RX_STATUS_REG_RECEIVED_LOCAL_FAULT_MASK   0x00000100
++#define XCMAC_STAT_RX_STATUS_REG_TEST_PATTERN_MISMATCH_MASK  0x00000E00
++#define XCMAC_STAT_RX_STATUS_REG_BAD_PREAMBLE_MASK     0x00001000
++#define XCMAC_STAT_RX_STATUS_REG_BAD_SFD_MASK          0x00002000
++#define XCMAC_STAT_RX_STATUS_REG_GOT_SIGNAL_OS_MASK    0x00004000
++
++#define XCMAC_STAT_STATUS_REG1                0x00000208 /** Status register */
++
++#define XCMAC_STAT_RX_BLOCK_LOCK_REG          0x0000020C /** When set means that the corresponding PCS lane has achieved block lock. */
++#define XCMAC_STAT_RX_LANE_SYNC_REG           0x00000210 /** Indicate whether a PCS lane is word boundary synchronised. A value of 1 indicates that the corresponding PCS lane has achieved word boundary synchronization and it has received a PCS lane marker. */
++#define XCMAC_STAT_RX_LANE_SYNC_ERR_REG       0x00000214 /** When set indicates the corresponding PCS lane lost word boundary synchronization error due to sync header framing bits error or that a PCS lane marked was never received. */
++#define XCMAC_STAT_RX_AM_ERR_REG              0x00000218 /** Count of all invalid or incorrectly formed PCS Lane Marker Words recieved. */
++#define XCMAC_STAT_RX_AM_LEN_ERR_REG          0x0000021C /** Count of PCA lane marker Length Errors indicating the PCS Lane Marker length mismatch. */
++#define XCMAC_STAT_RX_AM_REPEAT_ERR_REG       0x00000220 /** Count of PCS Lane Marker Consecutive errors. */
++#define XCMAC_STAT_RX_LANE_DEMUXED            0x00000224 /** When set means that the receiver has properly de-multiplexed that PCS lane. */
++#define XCMAC_STAT_RX_PCS_LANE_NUM_REG1       0x00000228 /** Indicates which physical lanes are receiving PCS lanes 0-5. */
++#define XCMAC_STAT_RX_PCS_LANE_NUM_REG2       0x0000022C /** Indicates which physical lanes are receiving PCS lanes 6-11. */
++#define XCMAC_STAT_RX_PCS_LANE_NUM_REG3       0x00000230 /** Indicates which physical lanes are receiving PCS lanes 12-17. */
++#define XCMAC_STAT_RX_PCS_LANE_NUM_REG4       0x00000234 /** Indicates which physical lanes are receiving PCS lanes 18-19. */
++#define XCMAC_STAT_RX_BIP_OVERRIDE_REG        0x00000238
++
++//0x023C - 0x02AF        Reserved
++
++//Histogram / Counter Registers macro
++#define XMAC_TICK_REG                0x000002B0
++#define XMAC_STAT_CYCLE_COUNT        0x000002B8
++/* The stat_rx_bip_err signals provide a per-lane indicator of signal quality. A non-zero value indicateis the BIP8 signature byte was in error for the corresponding PCS lane. */
++#define XMAC_STAT_RX_BIP_ERR_0       0x000002C0 /** BIP8 error indicator for PCS lane 0. */
++#define XMAC_STAT_RX_BIP_ERR_1       0x000002C8 /** BIP8 error indicator for PCS lane 1. */
++#define XMAC_STAT_RX_BIP_ERR_2       0x000002D0 /** BIP8 error indicator for PCS lane 2. */
++#define XMAC_STAT_RX_BIP_ERR_3       0x000002D8 /** BIP8 error indicator for PCS lane 3. */
++#define XMAC_STAT_RX_BIP_ERR_4       0x000002E0 /** BIP8 error indicator for PCS lane 4. */
++#define XMAC_STAT_RX_BIP_ERR_5       0x000002E8 /** BIP8 error indicator for PCS lane 5. */
++#define XMAC_STAT_RX_BIP_ERR_6       0x000002F0 /** BIP8 error indicator for PCS lane 6. */
++#define XMAC_STAT_RX_BIP_ERR_7       0x000002F8 /** BIP8 error indicator for PCS lane 7. */
++#define XMAC_STAT_RX_BIP_ERR_8       0x00000300 /** BIP8 error indicator for PCS lane 8. */
++#define XMAC_STAT_RX_BIP_ERR_9       0x00000308 /** BIP8 error indicator for PCS lane 9. */
++#define XMAC_STAT_RX_BIP_ERR_10      0x00000310 /** BIP8 error indicator for PCS lane 10. */
++#define XMAC_STAT_RX_BIP_ERR_11      0x00000318 /** BIP8 error indicator for PCS lane 11. */
++#define XMAC_STAT_RX_BIP_ERR_12      0x00000320 /** BIP8 error indicator for PCS lane 12. */
++#define XMAC_STAT_RX_BIP_ERR_13      0x00000328 /** BIP8 error indicator for PCS lane 13. */
++#define XMAC_STAT_RX_BIP_ERR_14      0x00000330 /** BIP8 error indicator for PCS lane 14. */
++#define XMAC_STAT_RX_BIP_ERR_15      0x00000338 /** BIP8 error indicator for PCS lane 15. */
++#define XMAC_STAT_RX_BIP_ERR_16      0x00000340 /** BIP8 error indicator for PCS lane 16. */
++#define XMAC_STAT_RX_BIP_ERR_17      0x00000348 /** BIP8 error indicator for PCS lane 17. */
++#define XMAC_STAT_RX_BIP_ERR_18      0x00000350 /** BIP8 error indicator for PCS lane 18. */
++#define XMAC_STAT_RX_BIP_ERR_19      0x00000358 /** BIP8 error indicator for PCS lane 19. */
++
++#define XMAC_STAT_RX_FRAMING_ERR_0        0x00000360 /** RX Sync header bits framing error for lane 0. Each PCS lane has a 4-bit bus that indicates the number of sync header errors received for that PCS lane. */
++#define XMAC_STAT_RX_FRAMING_ERR_1        0x00000368 /** RX Sync header bits framing error for lane 1 */
++#define XMAC_STAT_RX_FRAMING_ERR_2        0x00000370 /** RX Sync header bits framing error for lane 2 */
++#define XMAC_STAT_RX_FRAMING_ERR_3        0x00000378 /** RX Sync header bits framing error for lane 3 */
++#define XMAC_STAT_RX_FRAMING_ERR_4        0x00000380 /** RX Sync header bits framing error for lane 4 */
++#define XMAC_STAT_RX_FRAMING_ERR_5        0x00000388 /** RX Sync header bits framing error for lane 5 */
++#define XMAC_STAT_RX_FRAMING_ERR_6        0x00000390 /** RX Sync header bits framing error for lane 6 */
++#define XMAC_STAT_RX_FRAMING_ERR_7        0x00000398 /** RX Sync header bits framing error for lane 7 */
++#define XMAC_STAT_RX_FRAMING_ERR_8        0x000003A0 /** RX Sync header bits framing error for lane 8 */
++#define XMAC_STAT_RX_FRAMING_ERR_9        0x000003A8 /** RX Sync header bits framing error for lane 9 */
++#define XMAC_STAT_RX_FRAMING_ERR_10       0x000003B0 /** RX Sync header bits framing error for lane 10 */
++#define XMAC_STAT_RX_FRAMING_ERR_11       0x000003B8 /** RX Sync header bits framing error for lane 11 */
++#define XMAC_STAT_RX_FRAMING_ERR_12       0x000003C0 /** RX Sync header bits framing error for lane 12 */
++#define XMAC_STAT_RX_FRAMING_ERR_13       0x000003C8 /** RX Sync header bits framing error for lane 13 */
++#define XMAC_STAT_RX_FRAMING_ERR_14       0x000003D0 /** RX Sync header bits framing error for lane 14 */
++#define XMAC_STAT_RX_FRAMING_ERR_15       0x000003D8 /** RX Sync header bits framing error for lane 15 */
++#define XMAC_STAT_RX_FRAMING_ERR_16       0x000003E0 /** RX Sync header bits framing error for lane 16 */
++#define XMAC_STAT_RX_FRAMING_ERR_17       0x000003E8 /** RX Sync header bits framing error for lane 17 */
++#define XMAC_STAT_RX_FRAMING_ERR_18       0x000003F0 /** RX Sync header bits framing error for lane 18 */
++#define XMAC_STAT_RX_FRAMING_ERR_19       0x000003F8 /** RX Sync header bits framing error for lane 19 */
++//0x0400 - 0x0410        Reserved
++
++#define XMAC_STAT_RX_BAD_CODE        0x00000418 /** Counts of 64B/66B code violations */
++//0x0420        Reserved
++//0x0428        Reserved
++//0x0430        Reserved
++//0x0438        Reserved
++//0x0440        Reserved
++//0x0448        Reserved
++//0x0450        Reserved
++
++#define XMAC_STAT_TX_FRAME_ERROR        0x00000458 /** Count of packets with tx_errin set to indicate an EOP abort */
++//0x0460        Reserved
++
++#define XCMAC_STAT_TX_TOTAL_PACKETS               0x00000500 /** Total number of packets transmitted */
++#define XCMAC_STAT_TX_TOTAL_GOOD_PACKETS          0x00000508 /** Total number of good packeets transmitted */
++#define XCMAC_STAT_TX_TOTAL_BYTES                 0x00000510 /** Total number of bytes tranmsitted */
++#define XCMAC_STAT_TX_TOTAL_GOOD_BYTES            0x00000518 /** Total number of good bytes transmitted. This number is only non-zero when a packet is transmitted completely and contains no errors. */
++#define XCMAC_STAT_TX_PACKET_64_BYTES             0x00000520 /** Good or bad packets transmitted containing 64 bytes.*/
++#define XCMAC_STAT_TX_PACKET_65_127_BYTES         0x00000528 /** Good or bad packets transmitted containing 65-127 bytes.*/
++#define XCMAC_STAT_TX_PACKET_128_255_BYTES        0x00000530 /** Good or bad packets transmitted containing 128-255 bytes.*/
++#define XCMAC_STAT_TX_PACKET_256_511_BYTES        0x00000538 /** Good or bad packets transmitted containing 255-511 bytes.*/
++#define XCMAC_STAT_TX_PACKET_512_1023_BYTES       0x00000540 /** Good or bad packets transmitted containing 512-1023 bytes.*/
++#define XCMAC_STAT_TX_PACKET_1024_1518_BYTES      0x00000548 /** Good or bad packets transmitted containing 1024-1518 bytes.*/
++#define XCMAC_STAT_TX_PACKET_1519_1522_BYTES      0x00000550 /** Good or bad packets transmitted containing 1519-1522 bytes.*/
++#define XCMAC_STAT_TX_PACKET_1523_1548_BYTES      0x00000558 /** Good or bad packets transmitted containing 1523-1548 bytes.*/
++#define XCMAC_STAT_TX_PACKET_1549_2047_BYTES      0x00000560 /** Good or bad packets transmitted containing 1549-2047 bytes.*/
++#define XCMAC_STAT_TX_PACKET_2048_4095_BYTES      0x00000568 /** Good or bad packets transmitted containing 2048-4095 bytes.*/
++#define XCMAC_STAT_TX_PACKET_4096_8191_BYTES      0x00000570 /** Good or bad packets transmitted containing 4096-8191 bytes.*/
++#define XCMAC_STAT_TX_PACKET_8192_9215_BYTES      0x00000578 /** Good or bad packets transmitted containing 8192-9215 bytes.*/
++#define XCMAC_STAT_TX_PACKET_LARGE                0x00000580 /** Count of packets that are more than 9215 bytes long */
++#define XCMAC_STAT_TX_PACKET_SMALL                0x00000588 /** Count of packets that ar less than 64 bytes long. Packet transfer of less than 64 bytes is not permitted */
++//0x0590 - 0x05B0       Reserved
++
++#define XCMAC_STAT_TX_BAD_FCS            0x000005B8 /** Packets greater than 64 bytes that have FCS error */
++//0x05C0       Reserved
++//0x05C8       Reserved
++
++#define XCMAC_STAT_TX_UNICAST          0x000005D0 /** Good unicast packets count */
++#define XCMAC_STAT_TX_MULTICAST        0x000005D8 /** Good multicast packets count */
++#define XCMAC_STAT_TX_BROADCAST        0x000005E0 /** Good broadcast packets count */
++#define XCMAC_STAT_TX_VLAN             0x000005E8 /** Good 802.1Q tagged VLAN packets count */
++#define STAT_TX_PAUSE            0x000005F0 /** Count of 802.3x Ethernet MAC Pause packet with good FCS */
++#define STAT_TX_USER_PAUSE       0x000005F8 /** Count of priority based pause packets with good FCS */
++
++//0x0600       Reserved
++#define XCMAC_STAT_RX_TOTAL_PACKETS                0x00000608 /** Total no. of packets received. */
++#define XCMAC_STAT_RX_TOTAL_GOOD_PACKETS           0x00000610 /** Total number of good packets i.e. packets recieved completely and with no errors. */
++#define XCMAC_STAT_RX_TOTAL_BYTES                  0x00000618 /** Total number of bytes received. */
++#define XCMAC_STAT_RX_TOTAL_GOOD_BYTES             0x00000620 /** Total no. of good bytes received i.e. total bytes from good packets. */
++#define XCMAC_STAT_RX_PACKET_64_BYTES              0x00000628 /** Good or bad packets received containing 64 bytes.*/
++#define XCMAC_STAT_RX_PACKET_65_127_BYTES          0x00000630 /** Good or bad packets received containing 65-127 bytes.*/
++#define XCMAC_STAT_RX_PACKET_128_255_BYTES         0x00000638 /** Good or bad packets received containing 128-255 bytes.*/
++#define XCMAC_STAT_RX_PACKET_256_511_BYTES         0x00000640 /** Good or bad packets received containing 256-511 bytes.*/
++#define XCMAC_STAT_RX_PACKET_512_1023_BYTES        0x00000648 /** Good or bad packets received containing 512-1023 bytes.*/
++#define XCMAC_STAT_RX_PACKET_1024_1518_BYTES       0x00000650 /** Good or bad packets received containing 1024-1518 bytes.*/
++#define XCMAC_STAT_RX_PACKET_1519_1522_BYTES       0x00000658 /** Good or bad packets received containing 1519-1522 bytes.*/
++#define XCMAC_STAT_RX_PACKET_1523_1548_BYTES       0x00000660 /** Good or bad packets received containing 1523-1548 bytes.*/
++#define XCMAC_STAT_RX_PACKET_1549_2047_BYTES       0x00000668 /** Good or bad packets received containing 1549-2047 bytes.*/
++#define XCMAC_STAT_RX_PACKET_2048_4095_BYTES       0x00000670 /** Good or bad packets received containing 2048-4095 bytes.*/
++#define XCMAC_STAT_RX_PACKET_4096_8191_BYTES       0x00000678 /** Good or bad packets received containing 4096-8191 bytes.*/
++#define XCMAC_STAT_RX_PACKET_8192_9215_BYTES       0x00000680 /** Good or bad packets received containing 8192-9215 bytes.*/
++#define XCMAC_STAT_RX_PACKET_LARGE                 0x00000688 /** Count of all packets that are more than 9215 bytes long. */
++#define XCMAC_STAT_RX_PACKET_SMALL                 0x00000690 /** Count of all packets that are less than 64 bytes long. */
++#define XCMAC_STAT_RX_UNDERSIZE                    0x00000698 /** Count of all packets shorter than start_rx_min_packet_len with bad FCS. */
++#define XCMAC_STAT_RX_FRAGMENT                     0x000006A0 /** Count of all packets shorter than start_rx_min_packet_len with bad FCS. */
++#define XCMAC_STAT_RX_OVERSIZE                     0x000006A8 /** Count of all packets longer than ctl_rx_max_packet_len with good FCS. */
++#define XCMAC_STAT_RX_TOOLONG                      0x000006B0 /** Count of packets longer than ctl_rx_max_packet_len with good or bad FCS. */
++#define XCMAC_STAT_RX_JABBER                       0x000006B8 /** Count of packets longer than ctl_rx_max_packet_len with bad FCS. */
++#define XCMAC_STAT_RX_BAD_FCS                      0x000006C0 /** Count of packets with bad FCS. */
++#define XCMAC_STAT_RX_PACKET_BAD_FCS               0x000006C8 /** Count of packets between 64 and ctl_rx_max_packet_len_bytes that have FCS errors. */
++#define XCMAC_STAT_RX_STOMPED_FCS                  0x000006D0 /** Count of packet with stomped FCS i.e. bitwise inverse of the expected good FCS. */
++#define XCMAC_STAT_RX_UNICAST                      0x000006D8 /** Count of good unicast packets */
++#define XCMAC_STAT_RX_MULTICAST                    0x000006E0 /** Count of good multicast packets */
++#define XCMAC_STAT_RX_BROADCAST                    0x000006E8 /** Count of good broadcast packets */
++#define XCMAC_STAT_RX_VLAN                         0x000006F0 /** Count of good 802.1Q tagged VLAN packets. */
++#define XCMAC_STAT_RX_PAUSE                        0x000006F8 /** Count of 802.3x Ethernet MAC Pause packets with good FCS */
++#define XCMAC_STAT_RX_USER_PAUSE                   0x00000700 /** Count of priority based pause packets with good FCS */
++#define XCMAC_STAT_RX_INRANGEERR                   0x00000708 /** Count of packets with Length field error but with good FCS */
++#define XCMAC_STAT_RX_TRUNCATED                    0x00000710 /** Count of packets with truncation error due to size of packet exceeding ctl_rx_max_packet_len value. */
++
++/* User defined configurations */
++#define XCMAC_SUCCESS                     0
++#define XCMAC_FAILED                     -1
++#define        XCMAC_NUM_SAMP_DEVS                1
++
++/* statistics refresh period */
++#define XCMAC_STAT_REFRESH_PERIOD       1000
++#define XCMAC_RX_ALIGN_TIME_OUT         0x10
++
++#define XCMAC_RSFEC_CONFIG_INDICATION_CORRECTION 0x1000
++#define XCMAC_RSFEC_CONFIG_ENABLE 0x107C
++
++#define XCMAC_RSFEC_INDI_ENABLE 0x7
++#define XCMAC_RSFEC_ENABLE      0x3
 +
  /**
   * enum axienet_ip_type - AXIENET IP/MAC type.
@@ -256,7 +529,7 @@ index d51d8ce828ba..96704e508baa 100755
  };
  
  struct axienet_config {
-@@ -1349,11 +1253,10 @@ struct axienet_config {
+@@ -1099,11 +1253,10 @@ struct axienet_config {
  			struct clk **dclk);
  	u32 tx_ptplen;
  	u8 ts_header_len;
@@ -270,7 +543,9 @@ index d51d8ce828ba..96704e508baa 100755
   * @reg:	Register offset to be written for setting the option
   * @m_or:	Mask to be ORed for setting the option in the register
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet_dma.c b/drivers/net/ethernet/xilinx/xilinx_axienet_dma.c
-index 65d5b0dc2b2e..ce2c5036b3c7 100755
+old mode 100644
+new mode 100755
+index 70bd2dfd744c..ce2c5036b3c7
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet_dma.c
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet_dma.c
 @@ -391,7 +391,8 @@ void __maybe_unused axienet_dma_err_handler(unsigned long data)
@@ -293,8 +568,26 @@ index 65d5b0dc2b2e..ce2c5036b3c7 100755
  		axienet_status = axienet_ior(lp, XAE_IP_OFFSET);
  		if (axienet_status & XAE_INT_RXRJECT_MASK)
  			axienet_iow(lp, XAE_IS_OFFSET, XAE_INT_RXRJECT_MASK);
+@@ -503,9 +503,11 @@ void __maybe_unused axienet_dma_err_handler(unsigned long data)
+ 	if (lp->axienet_config->mactype != XAXIENET_10G_25G)
+ 		axienet_iow(lp, XAE_FCC_OFFSET, XAE_FCC_FCRX_MASK);
+ 
+-	lp->axienet_config->setoptions(ndev, lp->options &
++	if (lp->axienet_config->mactype != XAXIENET_100G) {
++		lp->axienet_config->setoptions(ndev, lp->options &
+ 			   ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
+-	axienet_set_mac_address(ndev, NULL);
+-	axienet_set_multicast_list(ndev);
+-	lp->axienet_config->setoptions(ndev, lp->options);
++		axienet_set_mac_address(ndev, NULL);
++		axienet_set_multicast_list(ndev);
++		lp->axienet_config->setoptions(ndev, lp->options);
++	}
+ }
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet_main.c b/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
-index 7c4c84e4b59e..36032c99bd20 100755
+old mode 100644
+new mode 100755
+index 85b5731f9d56..ff757f1721b0
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
 @@ -47,12 +47,9 @@
@@ -612,7 +905,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		iowrite32(MRMAC_GT_25G_MASK, (lp->gt_ctrl +
  			  MRMAC_GT_LANE_OFFSET * lp->gt_lane +
  			  MRMAC_GT_RATE_OFFSET));
-@@ -764,10 +545,10 @@ static inline int axienet_mrmac_gt_reset(struct net_device *ndev)
+@@ -764,29 +545,90 @@ static inline int axienet_mrmac_gt_reset(struct net_device *ndev)
  	iowrite32(MRMAC_GT_RST_RX_MASK | MRMAC_GT_RST_TX_MASK,
  		  (lp->gt_ctrl + MRMAC_GT_LANE_OFFSET * lp->gt_lane +
  		  MRMAC_GT_CTRL_OFFSET));
@@ -625,12 +918,11 @@ index 7c4c84e4b59e..36032c99bd20 100755
  
  	return 0;
  }
-@@ -852,23 +633,6 @@ static void xcmac_100G_reset(struct axienet_local *xcmac_dev)
- 			XCMAC_CONFIG_TX_FLOW_CONTROL_CONTROL_REG1_VAL);
- }
  
 -static inline int xxv_gt_reset(struct net_device *ndev)
--{
++/* CMAC Reset operation */
++static void xcmac_100G_reset(struct axienet_local *xcmac_dev)
+ {
 -	struct axienet_local *lp = netdev_priv(ndev);
 -	u32 val;
 -
@@ -642,14 +934,93 @@ index 7c4c84e4b59e..36032c99bd20 100755
 -	val = axienet_ior(lp, XXV_GT_RESET_OFFSET);
 -	val &= ~XXV_GT_RESET_MASK;
 -	axienet_iow(lp, XXV_GT_RESET_OFFSET, val);
--
++	unsigned long timeout;
++	/* Rx align time out delay */
++	unsigned long rx_align_time_out = XCMAC_RX_ALIGN_TIME_OUT;
++
++	/* Enable Tx Register */
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_REG1_OFFSET, XCMAC_CONFIG_TX_REG1_ENABLE_MASK);
++	mdelay(10);
++
++	/* Enable RX enable and TX send RFI */
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_RX_REG1_OFFSET,
++			XCMAC_CONFIG_RX_REG1_ENABLE_MASK);
++	mdelay(10);
++
++
++	/* Enable RS-FEC */
++	// axienet_iow(xcmac_dev, XCMAC_RSFEC_CONFIG_INDICATION_CORRECTION, XCMAC_RSFEC_INDI_ENABLE);
++	// mdelay(10);
++	// axienet_iow(xcmac_dev, XCMAC_RSFEC_CONFIG_ENABLE, XCMAC_RSFEC_ENABLE );
++	// mdelay(500);
++
++	/* Wait until CMAC core RX aligned, by polling the stat_rx_aligned reg
++	 * Note: Here you need to first perform a dummy read and then ignore
++	 * the read value and then keep polling the stat_rx_aligned bit for HIGH.
++	 * This is because the stat registers are all sticky bits and they
++	 * latch the values until they are read.
++	 *  */
++	/* Dummy Read */
++	axienet_ior(xcmac_dev, XCMAC_STAT_RX_STATUS_REG_OFFSET);
++	mdelay(50);
++
++	timeout = jiffies;
++	while (!(axienet_ior(xcmac_dev, XCMAC_STAT_RX_STATUS_REG_OFFSET) &
++				(XCMAC_STAT_RX_STATUS_REG_ALIGNED_MASK | XCMAC_STAT_RX_STATUS_REG_STATUS_MASK))) {
++		axienet_iow(xcmac_dev, XCMAC_GT_RESET_REG_OFFSET, XCMAC_GT_RESET_ALL_MASK);
++
++		mdelay(100);
++		/* Dummy Read */
++		axienet_ior(xcmac_dev, XCMAC_STAT_RX_STATUS_REG_OFFSET);
++		mdelay(50);
++		if (time_after(jiffies, (timeout + rx_align_time_out * HZ))) {
++			pr_err("XCMAC RX alignment timeout!\n");
++			break;
++		}
++	}
+ 
 -	return 0;
--}
--
++	/* For Flow Control*/
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG1,
++			XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG1_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG2,
++			XCMAC_CONFIG_RX_FLOW_CONTROL_CONTROL_REG2_VAL);
++
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG1,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG1_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG2,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG2_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG3,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG3_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG4,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG4_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG5,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_QUANTA_REG5_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG1,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG1_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG2,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG2_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG3,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG3_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG4,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG4_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG5,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_REFRESH_REG5_VAL);
++	axienet_iow(xcmac_dev, XCMAC_CONFIG_TX_FLOW_CONTROL_CONTROL_REG1,
++			XCMAC_CONFIG_TX_FLOW_CONTROL_CONTROL_REG1_VAL);
+ }
+ 
  void __axienet_device_reset(struct axienet_dma_q *q)
- {
- 	u32 timeout;
-@@ -917,15 +681,25 @@ static int axienet_device_reset(struct net_device *ndev)
+@@ -801,7 +643,7 @@ void __axienet_device_reset(struct axienet_dma_q *q)
+ 	 * they both reset the entire DMA core, so only one needs to be used.
+ 	 */
+ 	axienet_dma_out32(q, XAXIDMA_TX_CR_OFFSET, XAXIDMA_CR_RESET_MASK);
+-	timeout = DELAY_OF_ONE_MILLISEC;
++	timeout = DELAY_OF_ONE_MILLISEC*3000;
+ 	while (axienet_dma_in32(q, XAXIDMA_TX_CR_OFFSET) &
+ 				XAXIDMA_CR_RESET_MASK) {
+ 		udelay(1);
+@@ -837,15 +679,25 @@ static int axienet_device_reset(struct net_device *ndev)
  	struct axienet_dma_q *q;
  	u32 i;
  
@@ -681,16 +1052,21 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	}
  
  	for_each_rx_dma_queue(lp, i) {
-@@ -962,8 +736,6 @@ static int axienet_device_reset(struct net_device *ndev)
- 		xcmac_100G_reset(lp);
+@@ -878,10 +730,12 @@ static int axienet_device_reset(struct net_device *ndev)
+ 		return ret;
+ 	}
+ 
++	if (lp->axienet_config->mactype == XAXIENET_100G)
++		xcmac_100G_reset(lp);
  	if (lp->axienet_config->mactype != XAXIENET_10G_25G &&
  	    lp->axienet_config->mactype != XAXIENET_1G_10G_25G &&
--	    lp->axienet_config->mactype != XAXIENET_MRMAC &&
--	    lp->axienet_config->mactype != XAXIENET_DCMAC &&
  	    lp->axienet_config->mactype != XAXIENET_MRMAC &&
- 		lp->axienet_config->mactype != XAXIENET_100G) {
+-	    lp->axienet_config->mactype != XAXIENET_DCMAC) {
++		lp->axienet_config->mactype != XAXIENET_100G) {
  		axienet_status = axienet_ior(lp, XAE_RCW1_OFFSET);
-@@ -1023,7 +795,7 @@ static int axienet_device_reset(struct net_device *ndev)
+ 		axienet_status &= ~XAE_RCW1_RX_MASK;
+ 		axienet_iow(lp, XAE_RCW1_OFFSET, axienet_status);
+@@ -939,7 +793,7 @@ static int axienet_device_reset(struct net_device *ndev)
  	}
  #endif
  
@@ -699,10 +1075,19 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	    !lp->eth_hasnobuf) {
  		axienet_status = axienet_ior(lp, XAE_IP_OFFSET);
  		if (axienet_status & XAE_INT_RXRJECT_MASK)
-@@ -1046,28 +818,10 @@ static int axienet_device_reset(struct net_device *ndev)
+@@ -955,34 +809,17 @@ static int axienet_device_reset(struct net_device *ndev)
+ 		lp->options |= XAE_OPTION_FCS_STRIP;
+ 		lp->options |= XAE_OPTION_FCS_INSERT;
+ 	} else {
+-		axienet_iow(lp, XAE_FCC_OFFSET, XAE_FCC_FCRX_MASK);
++		if (lp->axienet_config->mactype != XAXIENET_100G)
++			axienet_iow(lp, XAE_FCC_OFFSET, XAE_FCC_FCRX_MASK);
+ 	}
+-	if (lp->axienet_config->setoptions)
++	if (lp->axienet_config->mactype != XAXIENET_100G) {
  		lp->axienet_config->setoptions(ndev, lp->options &
- 				       ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
- 
+-					~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
+-
 -	axienet_set_mac_address(ndev, NULL);
 -	axienet_set_multicast_list(ndev);
 -	if (lp->axienet_config->mactype == XAXIENET_DCMAC) {
@@ -722,7 +1107,8 @@ index 7c4c84e4b59e..36032c99bd20 100755
 -			return -ENODEV;
 -		}
 -	}
--
++				       ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
+ 
 -	if (lp->axienet_config->setoptions)
 +		axienet_set_mac_address(ndev, NULL);
 +		axienet_set_multicast_list(ndev);
@@ -731,7 +1117,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  
  	netif_trans_update(ndev);
  
-@@ -1430,7 +1184,8 @@ static int axienet_create_tsheader(u8 *buf, u8 msg_type,
+@@ -1345,7 +1182,8 @@ static int axienet_create_tsheader(u8 *buf, u8 msg_type,
  		buf[3] = (cur_p->ptp_tx_ts_tag >> 8) & 0xFF;
  	}
  
@@ -741,15 +1127,16 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		memcpy(&val, buf, AXIENET_TS_HEADER_LEN);
  		swab64s(&val);
  		memcpy(buf, &val, AXIENET_TS_HEADER_LEN);
-@@ -1605,7 +1360,6 @@ static int axienet_queue_xmit(struct sk_buff *skb,
+@@ -1520,7 +1358,7 @@ static int axienet_queue_xmit(struct sk_buff *skb,
  	if (lp->axienet_config->mactype == XAXIENET_10G_25G ||
  	    lp->axienet_config->mactype == XAXIENET_1G_10G_25G ||
  	    lp->axienet_config->mactype == XAXIENET_MRMAC ||
--	    lp->axienet_config->mactype == XAXIENET_DCMAC ||
- 	    lp->axienet_config->mactype == XAXIENET_100G) {
+-	    lp->axienet_config->mactype == XAXIENET_DCMAC) {
++	    lp->axienet_config->mactype == XAXIENET_100G) {
  		/* Need to manually pad the small frames in case of XXV MAC
  		 * because the pad field is not added by the IP. We must present
-@@ -1657,8 +1411,7 @@ static int axienet_queue_xmit(struct sk_buff *skb,
+ 		 * a packet that meets the minimum length to the IP core.
+@@ -1571,8 +1409,7 @@ static int axienet_queue_xmit(struct sk_buff *skb,
  #endif
  
  	if (skb->ip_summed == CHECKSUM_PARTIAL && !lp->eth_hasnobuf &&
@@ -759,7 +1146,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		if (lp->features & XAE_FEATURE_FULL_TX_CSUM) {
  			/* Tx Full Checksum Offload Enabled */
  			cur_p->app0 |= 2;
-@@ -1671,8 +1424,7 @@ static int axienet_queue_xmit(struct sk_buff *skb,
+@@ -1585,8 +1422,7 @@ static int axienet_queue_xmit(struct sk_buff *skb,
  		}
  	} else if (skb->ip_summed == CHECKSUM_UNNECESSARY &&
  		   !lp->eth_hasnobuf &&
@@ -769,7 +1156,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		cur_p->app0 |= 2; /* Tx Full Checksum Offload Enabled */
  	}
  
-@@ -1707,18 +1459,6 @@ static int axienet_queue_xmit(struct sk_buff *skb,
+@@ -1621,18 +1457,6 @@ static int axienet_queue_xmit(struct sk_buff *skb,
  	}
  	cur_p->tx_desc_mapping = DESC_DMA_MAP_SINGLE;
  
@@ -788,7 +1175,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	for (ii = 0; ii < num_frag; ii++) {
  		u32 len;
  		skb_frag_t *frag;
-@@ -1851,7 +1591,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
+@@ -1765,7 +1589,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
  		 */
  		if (likely(skb)) {
  			if (lp->eth_hasnobuf ||
@@ -797,7 +1184,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  				length = cur_p->status & XAXIDMA_BD_STS_ACTUAL_LEN_MASK;
  			else
  				length = cur_p->app4 & 0x0000FFFF;
-@@ -1867,7 +1607,8 @@ static int axienet_recv(struct net_device *ndev, int budget,
+@@ -1781,7 +1605,8 @@ static int axienet_recv(struct net_device *ndev, int budget,
  				u64 time64;
  				struct skb_shared_hwtstamps *shhwtstamps;
  
@@ -807,7 +1194,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  					/* The first 8 bytes will be the timestamp */
  					memcpy(&sec, &skb->data[0], 4);
  					memcpy(&nsec, &skb->data[4], 4);
-@@ -1896,7 +1637,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
+@@ -1810,7 +1635,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
  
  			/* if we're doing Rx csum offload, set it up */
  			if (lp->features & XAE_FEATURE_FULL_RX_CSUM &&
@@ -816,7 +1203,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  			    !lp->eth_hasnobuf) {
  				csumstatus = (cur_p->app2 &
  					      XAE_FULL_CSUM_STATUS_MASK) >> 3;
-@@ -1907,7 +1648,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
+@@ -1821,7 +1646,7 @@ static int axienet_recv(struct net_device *ndev, int budget,
  			} else if ((lp->features & XAE_FEATURE_PARTIAL_RX_CSUM) != 0 &&
  				   skb->protocol == htons(ETH_P_IP) &&
  				   skb->len > 64 && !lp->eth_hasnobuf &&
@@ -825,7 +1212,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  				skb->csum = be32_to_cpu(cur_p->app3 & 0xFFFF);
  				skb->ip_summed = CHECKSUM_COMPLETE;
  			}
-@@ -1998,12 +1739,7 @@ int xaxienet_rx_poll(struct napi_struct *napi, int quota)
+@@ -1912,12 +1737,7 @@ int xaxienet_rx_poll(struct napi_struct *napi, int quota)
  			dev_err(lp->dev, "Rx error 0x%x\n\r", status);
  			break;
  		}
@@ -839,7 +1226,49 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		status = axienet_dma_in32(q, XMCDMA_CHAN_SR_OFFSET(q->chan_id) +
  					  q->rx_offset);
  	}
-@@ -2159,6 +1895,25 @@ axienet_config_autoneg_link_training(struct axienet_local *lp, unsigned int spee
+@@ -1988,6 +1808,41 @@ static irqreturn_t axienet_eth_irq(int irq, void *_ndev)
+ 	return IRQ_HANDLED;
+ }
+ 
++static irqreturn_t axigpio_irq_handler(int irq, void *ndev)
++{
++	struct axienet_local *lp = netdev_priv(ndev);
++	unsigned int value, rx_val;
++
++	rx_val = ioread32(lp->gpio_regs + GPIO_CHN1_DATA_REG);
++	rx_val &= 0x1;
++	/* BIT0 - 0 means link down; BIT0 - 1 means link up
++	 * Checking the CMAC RX status and doing CMAC Reset
++	 * irrespective of the GPIO value.
++	 */
++	if (1) {
++		/* Dummy read: This is because the stat registers are all
++		 * sticky bits and they latch the values until they are read.
++		 */
++		value = axienet_ior(lp, XCMAC_STAT_RX_STATUS_REG_OFFSET);
++		mdelay(50);
++		value = axienet_ior(lp, XCMAC_STAT_RX_STATUS_REG_OFFSET);
++		if (!(value & (XCMAC_STAT_RX_STATUS_REG_ALIGNED_MASK |
++			XCMAC_STAT_RX_STATUS_REG_STATUS_MASK))) {
++			axienet_iow(lp, XCMAC_GT_RESET_REG_OFFSET,
++				(XCMAC_STAT_RX_STATUS_REG_STATUS_MASK |
++				 XCMAC_STAT_RX_STATUS_REG_ALIGNED_MASK |
++				 XCMAC_STAT_RX_STATUS_REG_MIS_ALIGNED_MASK));
++		}
++		value = axienet_ior(lp, XCMAC_STAT_RX_STATUS_REG_OFFSET);
++		if (rx_val && (value & (XCMAC_STAT_RX_STATUS_REG_ALIGNED_MASK |
++			XCMAC_STAT_RX_STATUS_REG_STATUS_MASK))) {
++			printk("XCMAC is UP now!\n");
++		}
++	}
++	iowrite32(GPIO_INT_CHN1_MASK, lp->gpio_regs + GPIO_INT_STS_REG);
++	return IRQ_HANDLED;
++}
++
+ static void
+ axienet_config_autoneg_link_training(struct axienet_local *lp, unsigned int speed_config)
+ {
+@@ -2038,6 +1893,25 @@ axienet_config_autoneg_link_training(struct axienet_local *lp, unsigned int spee
  	}
  }
  
@@ -865,7 +1294,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  /**
   * axienet_open - Driver open routine.
   * @ndev:	Pointer to net_device structure
-@@ -2335,7 +2090,7 @@ static int axienet_open(struct net_device *ndev)
+@@ -2214,7 +2088,7 @@ static int axienet_open(struct net_device *ndev)
  		/* Reset MRMAC */
  		axienet_mrmac_reset(lp);
  
@@ -874,7 +1303,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		/* Check for block lock bit to be set. This ensures that
  		 * MRMAC ethernet IP is functioning normally.
  		 */
-@@ -2362,12 +2117,12 @@ static int axienet_open(struct net_device *ndev)
+@@ -2241,17 +2115,35 @@ static int axienet_open(struct net_device *ndev)
  			ret = -ENODEV;
  			goto err_eth_irq;
  		}
@@ -889,19 +1318,43 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		ret = request_irq(lp->eth_irq, axienet_eth_irq, IRQF_SHARED,
  				  ndev->name, ndev);
  		if (ret)
-@@ -2454,9 +2209,8 @@ static int axienet_stop(struct net_device *ndev)
+ 			goto err_eth_irq;
+ 	}
++	if ((lp->axienet_config->mactype == XAXIENET_100G) && lp->gpio_irq) {
++		ret = request_irq(lp->gpio_irq, axigpio_irq_handler,
++				IRQF_SHARED, AXI_GPIO_INT, ndev);
++		if (ret) {
++			netdev_err(ndev, "ERROR gpio request_irq %d\n", ret);
++			lp->gpio_irq = 0;
++			goto err_eth_irq;
++		}
++		iowrite32(GPIO_GLOBAL_INT_MASK, lp->gpio_regs + GPIO_GLOBAL_INT_EN_REG);
++		iowrite32(GPIO_INT_CHN1_MASK, lp->gpio_regs + GPIO_INT_EN_REG);
++	}
++
++	if (lp->axienet_config->mactype == XAXIENET_1G_10G_25G) {
++		axienet_config_autoneg_link_training(lp,
++						     (XXVS_AN_10G_ABILITY_MASK
++						     | XXVS_AN_1G_ABILITY_MASK));
++		schedule_delayed_work(&lp->restart_work, msecs_to_jiffies(500));
++	}
+ 
+ 	/* If Runtime speed switching supported */
+ 	if (lp->axienet_config->mactype == XAXIENET_10G_25G &&
+@@ -2315,9 +2207,9 @@ static int axienet_stop(struct net_device *ndev)
  		phylink_disconnect_phy(lp->phylink);
  	}
  
 -	if (lp->axienet_config->setoptions)
 -		lp->axienet_config->setoptions(ndev, lp->options &
 -				~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
-+	lp->axienet_config->setoptions(ndev, lp->options &
-+			   ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
++	if (lp->axienet_config->mactype != XAXIENET_100G)
++            lp->axienet_config->setoptions(ndev, lp->options &
++                                           ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
  
  	for_each_tx_dma_queue(lp, i) {
  		q = lp->dq[i];
-@@ -2467,8 +2221,8 @@ static int axienet_stop(struct net_device *ndev)
+@@ -2328,8 +2220,8 @@ static int axienet_stop(struct net_device *ndev)
  		cr = axienet_dma_in32(q, XAXIDMA_TX_CR_OFFSET);
  		cr &= ~(XAXIDMA_CR_RUNSTOP_MASK | XAXIDMA_IRQ_ALL_MASK);
  		axienet_dma_out32(q, XAXIDMA_TX_CR_OFFSET, cr);
@@ -912,7 +1365,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  
  		/* Give DMAs a chance to halt gracefully */
  		sr = axienet_dma_in32(q, XAXIDMA_RX_SR_OFFSET);
-@@ -2498,25 +2252,16 @@ static int axienet_stop(struct net_device *ndev)
+@@ -2359,22 +2251,16 @@ static int axienet_stop(struct net_device *ndev)
  		free_irq(q->rx_irq, ndev);
  	}
  
@@ -920,9 +1373,6 @@ index 7c4c84e4b59e..36032c99bd20 100755
 +	if (lp->axienet_config->mactype == XAXIENET_1G && !lp->eth_hasnobuf)
  		free_irq(lp->eth_irq, ndev);
  
--	if ((lp->axienet_config->mactype == XAXIENET_100G)
--			&& lp->gpio_irq)
--		free_irq(lp->gpio_irq, ndev);
 +		if ((lp->axienet_config->mactype == XAXIENET_100G)
 +				&& lp->gpio_irq)
 +			free_irq(lp->gpio_irq, ndev);
@@ -944,26 +1394,38 @@ index 7c4c84e4b59e..36032c99bd20 100755
  
  	return 0;
  }
-@@ -2545,11 +2290,14 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
- 		if (netif_running(ndev))
- 			return -EBUSY;
+@@ -2394,14 +2280,24 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
+ {
+ 	struct axienet_local *lp = netdev_priv(ndev);
+ 
+-	if (netif_running(ndev))
+-		return -EBUSY;
++	if (lp->axienet_config->mactype == XAXIENET_100G) {
++		if (netif_running(ndev))
++			axienet_stop(ndev);
++		ndev->mtu = new_mtu;
++		axienet_open(ndev);
++	} else {
++		if (netif_running(ndev))
++			return -EBUSY;
  
 -	if ((new_mtu + VLAN_ETH_HLEN +
 -		XAE_TRL_SIZE) > lp->rxmem)
 -		return -EINVAL;
 +    	if (netif_running(ndev))
 +		    return -EBUSY;
- 
--	ndev->mtu = new_mtu;
++
 +		if ((new_mtu + VLAN_ETH_HLEN +
 +			XAE_TRL_SIZE) > lp->rxmem)
 +			return -EINVAL;
-+
+ 
+-	ndev->mtu = new_mtu;
 +		ndev->mtu = new_mtu;
- 	}
++	}
  
  	return 0;
-@@ -3021,6 +2769,24 @@ axienet_ethtools_get_link_ksettings(struct net_device *ndev,
+ }
+@@ -2872,6 +2768,24 @@ axienet_ethtools_get_link_ksettings(struct net_device *ndev,
  				    struct ethtool_link_ksettings *cmd)
  {
  	struct axienet_local *lp = netdev_priv(ndev);
@@ -988,7 +1450,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  
  	if (!lp->phylink)
  		return -EOPNOTSUPP;
-@@ -3034,6 +2800,17 @@ axienet_ethtools_set_link_ksettings(struct net_device *ndev,
+@@ -2885,6 +2799,17 @@ axienet_ethtools_set_link_ksettings(struct net_device *ndev,
  {
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -1006,7 +1468,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	if (!lp->phylink)
  		return -EOPNOTSUPP;
  
-@@ -3105,7 +2882,7 @@ static int axienet_ethtools_get_ts_info(struct net_device *ndev,
+@@ -2956,7 +2881,7 @@ static int axienet_ethtools_get_ts_info(struct net_device *ndev,
   * Return: number of strings, on success, Non-zero error value on
   *	   failure.
   */
@@ -1015,7 +1477,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  {
  	switch (sset) {
  	case ETH_SS_STATS:
-@@ -3128,9 +2905,9 @@ static int axienet_ethtools_sset_count(struct net_device *ndev, int sset)
+@@ -2979,9 +2904,9 @@ static int axienet_ethtools_sset_count(struct net_device *ndev, int sset)
   *
   * Return: None.
   */
@@ -1028,7 +1490,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  {
  	unsigned int i = 0;
  
-@@ -3155,7 +2932,7 @@ static void axienet_ethtools_get_stats(struct net_device *ndev,
+@@ -3006,7 +2931,7 @@ static void axienet_ethtools_get_stats(struct net_device *ndev,
   *
   * Return: None.
   */
@@ -1037,7 +1499,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  {
  	int i;
  
-@@ -3170,65 +2947,6 @@ static void axienet_ethtools_strings(struct net_device *ndev, u32 sset, u8 *data
+@@ -3021,65 +2946,6 @@ static void axienet_ethtools_strings(struct net_device *ndev, u32 sset, u8 *data
  #endif
  }
  
@@ -1103,7 +1565,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  static const struct ethtool_ops axienet_ethtool_ops = {
  	.supported_coalesce_params = ETHTOOL_COALESCE_MAX_FRAMES |
  				     ETHTOOL_COALESCE_USECS,
-@@ -3251,10 +2969,6 @@ static const struct ethtool_ops axienet_ethtool_ops = {
+@@ -3102,10 +2968,6 @@ static const struct ethtool_ops axienet_ethtool_ops = {
  	.get_link_ksettings = axienet_ethtools_get_link_ksettings,
  	.set_link_ksettings = axienet_ethtools_set_link_ksettings,
  	.nway_reset	= axienet_ethtools_nway_reset,
@@ -1114,15 +1576,17 @@ index 7c4c84e4b59e..36032c99bd20 100755
  };
  
  #ifdef CONFIG_AXIENET_HAS_MCDMA
-@@ -3426,27 +3140,6 @@ static void axienet_100G_link_sts(struct platform_device *pdev,
- 	return;
+@@ -3247,25 +3109,34 @@ static struct axienet_local *pcs_to_axienet_local(struct phylink_pcs *pcs)
+ 	return container_of(pcs, struct axienet_local, pcs);
  }
  
 -static void axienet_dcmac_get_fixed_state(struct phylink_config *config,
 -					  struct phylink_link_state *state)
--{
++static void axienet_100G_link_sts(struct platform_device *pdev,
++		struct net_device *ndev)
+ {
 -	struct net_device *ndev = to_net_dev(config->dev);
--	struct axienet_local *lp = netdev_priv(ndev);
+ 	struct axienet_local *lp = netdev_priv(ndev);
 -	u32 rx_phy_stat;
 -
 -	state->duplex = DUPLEX_FULL;
@@ -1133,16 +1597,37 @@ index 7c4c84e4b59e..36032c99bd20 100755
 -	/* Clear previous status */
 -	axienet_iow(lp, DCMAC_STS_RX_PHY_OFFSET, 0xFFFFFFFF);
 -	rx_phy_stat = axienet_ior(lp, DCMAC_STS_RX_PHY_OFFSET);
--
++	struct device_node *np = NULL;
++	struct resource gpiores;
++	int ret;
+ 
 -	state->link = (rx_phy_stat & DCMAC_RXPHY_RX_STS_MASK &&
 -			rx_phy_stat & DCMAC_RXPHY_RX_ALIGN_MASK);
 -	phylink_clear(state->advertising, Autoneg);
--}
--
++	np = of_parse_phandle(pdev->dev.of_node, "axigpio-handle", 0);
++	if (np) {
++		ret = of_address_to_resource(np, 0, &gpiores);
++		if (ret >= 0) {
++			lp->gpio_regs = devm_ioremap_resource(&pdev->dev,
++					&gpiores);
++			if (IS_ERR(lp->regs)) {
++				dev_err(&pdev->dev, "unable to ioremap GPIO resource\n");
++				return;
++			}
++		} else {
++			dev_err(&pdev->dev, "unable to get GPIO resource\n");
++			return;
++		}
++		lp->gpio_irq = irq_of_parse_and_map(np, 0);
++	} else {
++		dev_err(&pdev->dev, "missing axigpio-handle property\n");
++		return;
++	}
++	return;
+ }
+ 
  static void axienet_pcs_get_state(struct phylink_pcs *pcs,
- 				  struct phylink_link_state *state)
- {
-@@ -3454,7 +3147,12 @@ static void axienet_pcs_get_state(struct phylink_pcs *pcs,
+@@ -3275,7 +3146,12 @@ static void axienet_pcs_get_state(struct phylink_pcs *pcs,
  	u32 speed, an_status, val;
  	bool tx_pause, rx_pause;
  
@@ -1156,7 +1641,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		int gt_rst, blk_lock;
  
  		speed = axienet_ior(lp, XXV_STAT_CORE_SPEED_OFFSET);
-@@ -3483,31 +3181,6 @@ static void axienet_pcs_get_state(struct phylink_pcs *pcs,
+@@ -3304,31 +3180,6 @@ static void axienet_pcs_get_state(struct phylink_pcs *pcs,
  			if (!blk_lock)
  				state->link = 1;
  		}
@@ -1188,7 +1673,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	}
  }
  
-@@ -3515,8 +3188,7 @@ static void axienet_pcs_an_restart(struct phylink_pcs *pcs)
+@@ -3336,8 +3187,7 @@ static void axienet_pcs_an_restart(struct phylink_pcs *pcs)
  {
  	struct axienet_local *lp = pcs_to_axienet_local(pcs);
  
@@ -1198,7 +1683,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		axienet_iow(lp, XXVS_AN_CTL1_OFFSET,
  			    (axienet_ior(lp, XXVS_AN_CTL1_OFFSET) |
  			     XXV_AN_RESTART_MASK));
-@@ -3557,49 +3229,6 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -3378,49 +3228,6 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  		/* If auto-negotiation is not completed, restart auto-neg */
  		return (neg_mode == (unsigned int)PHYLINK_PCS_NEG_INBAND_ENABLED &&
  			autoneg_complete == 0);
@@ -1248,7 +1733,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	}
  
  	ret = phylink_mii_c22_pcs_config(pcs_phy, interface, advertising,
-@@ -3648,9 +3277,7 @@ static void axienet_mac_link_up(struct phylink_config *config,
+@@ -3469,9 +3276,7 @@ static void axienet_mac_link_up(struct phylink_config *config,
  	struct axienet_local *lp = netdev_priv(ndev);
  	u32 emmc_reg, fcc_reg;
  
@@ -1259,7 +1744,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		/* nothing meaningful to do */
  		return;
  	}
-@@ -3691,91 +3318,11 @@ static void axienet_mac_link_up(struct phylink_config *config,
+@@ -3512,91 +3317,11 @@ static void axienet_mac_link_up(struct phylink_config *config,
  	axienet_iow(lp, XAE_FCC_OFFSET, fcc_reg);
  }
  
@@ -1351,7 +1836,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  };
  
  static int axienet_clk_init(struct platform_device *pdev,
-@@ -4023,8 +3570,15 @@ static int xxvenet_clk_init(struct platform_device *pdev,
+@@ -3844,8 +3569,15 @@ static int xxvenet_clk_init(struct platform_device *pdev,
  	return err;
  }
  
@@ -1369,7 +1854,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	.setoptions = axienet_setoptions,
  	.clk_init = axienet_clk_init,
  	.tx_ptplen = XAE_TX_PTP_LEN,
-@@ -4043,7 +3597,6 @@ static const struct axienet_config axienet_10g25g_config = {
+@@ -3864,7 +3596,6 @@ static const struct axienet_config axienet_10g25g_config = {
  	.clk_init = xxvenet_clk_init,
  	.tx_ptplen = XXV_TX_PTP_LEN,
  	.ts_header_len = XXVENET_TS_HEADER_LEN,
@@ -1377,7 +1862,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  };
  
  static const struct axienet_config axienet_1g10g25g_config = {
-@@ -4051,7 +3604,6 @@ static const struct axienet_config axienet_1g10g25g_config = {
+@@ -3872,7 +3603,6 @@ static const struct axienet_config axienet_1g10g25g_config = {
  	.setoptions = xxvenet_setoptions,
  	.clk_init = xxvenet_clk_init,
  	.tx_ptplen = XXV_TX_PTP_LEN,
@@ -1385,24 +1870,23 @@ index 7c4c84e4b59e..36032c99bd20 100755
  };
  
  static const struct axienet_config axienet_usxgmii_config = {
-@@ -4067,7 +3619,6 @@ static const struct axienet_config axienet_mrmac_config = {
+@@ -3888,22 +3618,22 @@ static const struct axienet_config axienet_mrmac_config = {
  	.clk_init = xxvenet_clk_init,
  	.tx_ptplen = XXV_TX_PTP_LEN,
  	.ts_header_len = MRMAC_TS_HEADER_LEN,
 -	.gt_reset = axienet_mrmac_gt_reset,
  };
  
- static const struct axienet_config cmac_100g_config = {
-@@ -4077,19 +3628,13 @@ static const struct axienet_config cmac_100g_config = {
- 	.tx_ptplen = 0,
- };
- 
 -static const struct axienet_config axienet_dcmac_config = {
 -	.mactype = XAXIENET_DCMAC,
--	.clk_init = xxvenet_clk_init,
++static const struct axienet_config cmac_100g_config = {
++	.mactype = XAXIENET_100G,
++	.setoptions = NULL,
+ 	.clk_init = xxvenet_clk_init,
 -	.gt_reset = dcmac_gt_reset,
--};
--
++	.tx_ptplen = 0,
+ };
+ 
  /* Match table for of_platform binding */
  static const struct of_device_id axienet_of_match[] = {
 -	{ .compatible = "xlnx,axi-ethernet-1.00.a", .data = &axienet_1_2p5g_config},
@@ -1417,16 +1901,20 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	{ .compatible = "xlnx,ten-gig-eth-mac", .data = &axienet_10g_config},
  	{ .compatible = "xlnx,xxv-ethernet-1.0",
  						.data = &axienet_10g25g_config},
-@@ -4099,8 +3644,6 @@ static const struct of_device_id axienet_of_match[] = {
+@@ -3913,56 +3643,17 @@ static const struct of_device_id axienet_of_match[] = {
  					.data = &axienet_mrmac_config},
  	{ .compatible = "xlnx,ethernet-1-10-25g-2.7",
  					.data = &axienet_1g10g25g_config},
 -	{ .compatible = "xlnx,dcmac-2.4",
 -					.data = &axienet_dcmac_config},
- 	{ .compatible = "xlnx,cmac-usplus-2.4",
- 					.data = &cmac_100g_config},
- 	{ .compatible = "xlnx,cmac-usplus-3.0",
-@@ -4112,49 +3655,6 @@ static const struct of_device_id axienet_of_match[] = {
++	{ .compatible = "xlnx,cmac-usplus-2.4",
++					.data = &cmac_100g_config},
++	{ .compatible = "xlnx,cmac-usplus-3.0",
++					.data = &cmac_100g_config},
++	{ .compatible = "xlnx,cmac-usplus-3.1",
++					.data = &cmac_100g_config},
+ 	{},
+ };
  
  MODULE_DEVICE_TABLE(of, axienet_of_match);
  
@@ -1476,7 +1964,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  /**
   * axienet_probe - Axi Ethernet probe function.
   * @pdev:	Pointer to platform device structure.
-@@ -4218,8 +3718,6 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4026,8 +3717,6 @@ static int axienet_probe(struct platform_device *pdev)
  	lp->rx_bd_num = RX_BD_NUM_DEFAULT;
  	lp->tx_bd_num = TX_BD_NUM_DEFAULT;
  
@@ -1485,7 +1973,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	lp->axi_clk = devm_clk_get_optional(&pdev->dev, "s_axi_lite_clk");
  	if (!lp->axi_clk) {
  		/* For backward compatibility, if named AXI clock is not present,
-@@ -4324,7 +3822,8 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4132,7 +3821,8 @@ static int axienet_probe(struct platform_device *pdev)
  						   "xlnx,switch-x-sgmii");
  
  	/* Start with the proprietary, and broken phy_type */
@@ -1495,8 +1983,16 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		ret = of_property_read_u32(pdev->dev.of_node, "xlnx,phy-type", &value);
  		if (!ret) {
  			switch (value) {
-@@ -4356,40 +3855,29 @@ static int axienet_probe(struct platform_device *pdev)
- 				goto cleanup_clk;
+@@ -4159,45 +3849,35 @@ static int axienet_probe(struct platform_device *pdev)
+ 				break;
+ 			}
+ 		} else {
++                        lp->phy_mode = PHY_INTERFACE_MODE_NA;
+ 			ret = of_get_phy_mode(pdev->dev.of_node, &lp->phy_mode);
+-			if (ret)
+-				goto cleanup_clk;
++			/* if (ret) */
++			/* 	goto cleanup_clk; */
  		}
  	}
 +	if (lp->switch_x_sgmii && lp->phy_mode != PHY_INTERFACE_MODE_SGMII &&
@@ -1547,7 +2043,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		lp->eth_irq = platform_get_irq(pdev, 0);
  
  	if (lp->axienet_config->mactype == XAXIENET_MRMAC) {
-@@ -4466,66 +3954,6 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4274,66 +3954,6 @@ static int axienet_probe(struct platform_device *pdev)
  			goto cleanup_clk;
  		}
  		dev_info(&pdev->dev, "GT lane: %d\n", lp->gt_lane);
@@ -1614,7 +2110,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	}
  
  #ifdef CONFIG_XILINX_AXI_EMAC_HWTSTAMP
-@@ -4588,17 +4016,6 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4396,17 +4016,6 @@ static int axienet_probe(struct platform_device *pdev)
  	    lp->axienet_config->mactype == XAXIENET_1G_10G_25G)
  		lp->xxv_ip_version = axienet_ior(lp, XXV_CONFIG_REVISION);
  
@@ -1632,27 +2128,27 @@ index 7c4c84e4b59e..36032c99bd20 100755
  #ifdef CONFIG_AXIENET_HAS_MCDMA
  	ret = axienet_mcdma_probe(pdev, lp, ndev);
  #else
-@@ -4654,8 +4071,7 @@ static int axienet_probe(struct platform_device *pdev)
- 
+@@ -4463,7 +4072,7 @@ static int axienet_probe(struct platform_device *pdev)
  	if (lp->axienet_config->mactype != XAXIENET_10G_25G &&
  	    lp->axienet_config->mactype != XAXIENET_1G_10G_25G &&
--	    lp->axienet_config->mactype != XAXIENET_MRMAC &&
+ 	    lp->axienet_config->mactype != XAXIENET_MRMAC &&
 -	    lp->axienet_config->mactype != XAXIENET_DCMAC) {
-+	    lp->axienet_config->mactype != XAXIENET_MRMAC) {
++            lp->axienet_config->mactype != XAXIENET_100G) {
  		np = of_parse_phandle(pdev->dev.of_node, "pcs-handle", 0);
  		if (!np) {
  			/* For SGMII/1000BaseX:
-@@ -4688,7 +4104,8 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4496,7 +4105,9 @@ static int axienet_probe(struct platform_device *pdev)
  		of_node_put(np);
  	}
  
 -	if (lp->axienet_config->mactype != XAXIENET_MRMAC) {
 +	if (lp->axienet_config->mactype != XAXIENET_1G_10G_25G &&
-+	    lp->axienet_config->mactype != XAXIENET_MRMAC) {
++	    lp->axienet_config->mactype != XAXIENET_MRMAC &&
++            lp->axienet_config->mactype != XAXIENET_100G) {
  		lp->pcs.ops = &axienet_pcs_ops;
  		lp->pcs.neg_mode = true;
  		lp->pcs.poll = true;
-@@ -4714,67 +4131,22 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -4522,76 +4133,34 @@ static int axienet_probe(struct platform_device *pdev)
  					lp->phylink_config.mac_capabilities |= MAC_25000FD;
  				}
  			}
@@ -1716,21 +2212,37 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		}
  	}
  
- 	__set_bit(lp->phy_mode, lp->phylink_config.supported_interfaces);
-+	if (lp->switch_x_sgmii) {
+-	__set_bit(lp->phy_mode, lp->phylink_config.supported_interfaces);
++        if(lp->axienet_config->mactype != XAXIENET_100G)
++        {
++            __set_bit(lp->phy_mode, lp->phylink_config.supported_interfaces);
++            if (lp->switch_x_sgmii) {
 +		__set_bit(PHY_INTERFACE_MODE_1000BASEX,
 +			  lp->phylink_config.supported_interfaces);
 +		__set_bit(PHY_INTERFACE_MODE_SGMII,
 +			  lp->phylink_config.supported_interfaces);
-+	}
++            }
  
 -	if (lp->axienet_config->mactype != XAXIENET_MRMAC) {
-+	if (lp->axienet_config->mactype != XAXIENET_1G_10G_25G &&
-+	    lp->axienet_config->mactype != XAXIENET_MRMAC) {
++            if (lp->axienet_config->mactype != XAXIENET_1G_10G_25G &&
++                lp->axienet_config->mactype != XAXIENET_MRMAC) {
  		lp->phylink = phylink_create(&lp->phylink_config, pdev->dev.fwnode,
  					     lp->phy_mode,
  					     &axienet_phylink_ops);
-@@ -4794,47 +4166,20 @@ static int axienet_probe(struct platform_device *pdev)
+-	}
+-	if (IS_ERR(lp->phylink)) {
++            }
++            if (IS_ERR(lp->phylink)) {
+ 		ret = PTR_ERR(lp->phylink);
+ 		dev_err(&pdev->dev, "phylink_create error (%i)\n", ret);
+ 		goto cleanup_mdio;
+-	}
++            }
++        }
+ 
+ #ifdef CONFIG_AXIENET_HAS_MCDMA
+ 	/* Create sysfs file entries for the device */
+@@ -4602,45 +4171,20 @@ static int axienet_probe(struct platform_device *pdev)
  	}
  #endif
  
@@ -1754,16 +2266,13 @@ index 7c4c84e4b59e..36032c99bd20 100755
  		goto cleanup_phylink;
  	}
  
-+	if (lp->axienet_config->mactype == XAXIENET_1G_10G_25G)
-+		INIT_DELAYED_WORK(&lp->restart_work, speed_monitor_thread);
-+
- 	if (lp->axienet_config->mactype == XAXIENET_100G)
- 		axienet_100G_link_sts(pdev, ndev);
 -	/* Register notifier for inet address additions/deletions.
 -	 * It should be called after register_netdev to access the interface's
 -	 * network configuration parameters.
 -	 */
--
++	if (lp->axienet_config->mactype == XAXIENET_1G_10G_25G)
++		INIT_DELAYED_WORK(&lp->restart_work, speed_monitor_thread);
+ 
 -	if (lp->eoe_features & RX_HW_UDP_GRO) {
 -		lp->inetaddr_notifier.notifier_call = axienet_eoe_netdev_event;
 -		ret = register_inetaddr_notifier(&lp->inetaddr_notifier);
@@ -1772,6 +2281,8 @@ index 7c4c84e4b59e..36032c99bd20 100755
 -			goto err_unregister_netdev;
 -		}
 -	}
++	if (lp->axienet_config->mactype == XAXIENET_100G)
++		axienet_100G_link_sts(pdev, ndev);
  
  	return 0;
  
@@ -1781,7 +2292,7 @@ index 7c4c84e4b59e..36032c99bd20 100755
  cleanup_phylink:
  	phylink_destroy(lp->phylink);
  
-@@ -4864,8 +4209,6 @@ static int axienet_remove(struct platform_device *pdev)
+@@ -4670,8 +4214,6 @@ static int axienet_remove(struct platform_device *pdev)
  
  	for_each_rx_dma_queue(lp, i)
  		netif_napi_del(&lp->napi[i]);
@@ -1791,7 +2302,9 @@ index 7c4c84e4b59e..36032c99bd20 100755
  	axienet_clk_disable(pdev);
  
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet_mcdma.c b/drivers/net/ethernet/xilinx/xilinx_axienet_mcdma.c
-index 74b997f8aeef..d2bebe01ea19 100755
+old mode 100644
+new mode 100755
+index 9ae994bc369a..d2bebe01ea19
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet_mcdma.c
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet_mcdma.c
 @@ -22,7 +22,6 @@
@@ -1876,7 +2389,17 @@ index 74b997f8aeef..d2bebe01ea19 100755
  	}
  	return -ENOMEM;
  }
-@@ -738,8 +727,7 @@ void __maybe_unused axienet_mcdma_err_handler(unsigned long data)
+@@ -616,7 +605,8 @@ void __maybe_unused axienet_mcdma_err_handler(unsigned long data)
+ 	struct net_device *ndev = lp->ndev;
+ 	struct aximcdma_bd *cur_p;
+ 
+-	lp->axienet_config->setoptions(ndev, lp->options &
++	if (lp->axienet_config->mactype != XAXIENET_100G)
++		lp->axienet_config->setoptions(ndev, lp->options &
+ 				       ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
+ 	/* When we do an Axi Ethernet reset, it resets the complete core
+ 	 * including the MDIO. MDIO must be disabled before resetting.
+@@ -737,8 +727,7 @@ void __maybe_unused axienet_mcdma_err_handler(unsigned long data)
  		axienet_iow(lp, XAE_RCW1_OFFSET, axienet_status);
  	}
  
@@ -1886,6 +2409,24 @@ index 74b997f8aeef..d2bebe01ea19 100755
  		axienet_status = axienet_ior(lp, XAE_IP_OFFSET);
  		if (axienet_status & XAE_INT_RXRJECT_MASK)
  			axienet_iow(lp, XAE_IS_OFFSET, XAE_INT_RXRJECT_MASK);
+@@ -762,11 +751,13 @@ void __maybe_unused axienet_mcdma_err_handler(unsigned long data)
+ 	}
+ #endif
+ 
+-	lp->axienet_config->setoptions(ndev, lp->options &
++	if (lp->axienet_config->mactype != XAXIENET_100G) {
++		lp->axienet_config->setoptions(ndev, lp->options &
+ 				       ~(XAE_OPTION_TXEN | XAE_OPTION_RXEN));
+-	axienet_set_mac_address(ndev, NULL);
+-	axienet_set_multicast_list(ndev);
+-	lp->axienet_config->setoptions(ndev, lp->options);
++		axienet_set_mac_address(ndev, NULL);
++		axienet_set_multicast_list(ndev);
++		lp->axienet_config->setoptions(ndev, lp->options);
++	}
+ }
+ 
+ int __maybe_unused axienet_mcdma_tx_probe(struct platform_device *pdev,
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet_mdio.c b/drivers/net/ethernet/xilinx/xilinx_axienet_mdio.c
 index 9ca2643c921e..2f07fde361aa 100644
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet_mdio.c
@@ -1933,3 +2474,6 @@ index 9ca2643c921e..2f07fde361aa 100644
  static void axienet_mdio_mdc_disable(struct axienet_local *lp)
  {
  	u32 mc_reg;
+-- 
+2.25.1
+
