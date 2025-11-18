@@ -728,10 +728,8 @@ proc create_hier_cell_cmac { parentCell nameHier } {
   [get_bd_pins xlslice_1/Din]
   connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tdata  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tdata] \
   [get_bd_pins axis_dwidth_converter_0/s_axis_tdata]
-  connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tdest  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tdest] \
-  [get_bd_pins axis_dwidth_converter_0/s_axis_tdest]
-  connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tid  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tid] \
-  [get_bd_pins axis_dwidth_converter_0/s_axis_tid]
+  connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tdest  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tdest]
+  connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tid  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tid]
   connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tkeep  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tkeep] \
   [get_bd_pins axis_dwidth_converter_0/s_axis_tkeep]
   connect_bd_net -net axi_mcdma_0_m_axis_mm2s_tlast  [get_bd_pins axi_mcdma_0/m_axis_mm2s_tlast] \
@@ -765,10 +763,6 @@ proc create_hier_cell_cmac { parentCell nameHier } {
   [get_bd_pins axis_dwidth_converter_0/m_axis_tready]
   connect_bd_net -net axis_dwidth_converter_0_m_axis_tdata  [get_bd_pins axis_dwidth_converter_0/m_axis_tdata] \
   [get_bd_pins axis_data_fifo_0/s_axis_tdata]
-  connect_bd_net -net axis_dwidth_converter_0_m_axis_tdest  [get_bd_pins axis_dwidth_converter_0/m_axis_tdest] \
-  [get_bd_pins axis_data_fifo_0/s_axis_tdest]
-  connect_bd_net -net axis_dwidth_converter_0_m_axis_tid  [get_bd_pins axis_dwidth_converter_0/m_axis_tid] \
-  [get_bd_pins axis_data_fifo_0/s_axis_tid]
   connect_bd_net -net axis_dwidth_converter_0_m_axis_tkeep  [get_bd_pins axis_dwidth_converter_0/m_axis_tkeep] \
   [get_bd_pins axis_data_fifo_0/s_axis_tkeep]
   connect_bd_net -net axis_dwidth_converter_0_m_axis_tlast  [get_bd_pins axis_dwidth_converter_0/m_axis_tlast] \
