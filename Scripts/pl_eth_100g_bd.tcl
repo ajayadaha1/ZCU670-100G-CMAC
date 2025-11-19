@@ -547,7 +547,7 @@ proc create_hier_cell_cmac { parentCell nameHier } {
   # Create instance: axis_data_fifo_0, and set properties
   set axis_data_fifo_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_0 ]
   set_property -dict [list \
-    CONFIG.FIFO_DEPTH {8192} \
+    CONFIG.FIFO_DEPTH {4096} \
     CONFIG.FIFO_MODE {2} \
     CONFIG.HAS_TKEEP {1} \
     CONFIG.TDATA_NUM_BYTES {64} \
@@ -557,7 +557,7 @@ proc create_hier_cell_cmac { parentCell nameHier } {
   # Create instance: axis_data_fifo_1, and set properties
   set axis_data_fifo_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_1 ]
   set_property -dict [list \
-    CONFIG.FIFO_DEPTH {8192} \
+    CONFIG.FIFO_DEPTH {4096} \
     CONFIG.FIFO_MODE {2} \
     CONFIG.HAS_TKEEP {1} \
     CONFIG.TDATA_NUM_BYTES {64} \
@@ -616,10 +616,11 @@ proc create_hier_cell_cmac { parentCell nameHier } {
   set_property -dict [list \
     CONFIG.DIFFCLK_BOARD_INTERFACE {Custom} \
     CONFIG.ENABLE_AXI_INTERFACE {1} \
+    CONFIG.ENABLE_PIPELINE_REG {1} \
     CONFIG.ETHERNET_BOARD_INTERFACE {Custom} \
     CONFIG.GT_DRP_CLK {100} \
     CONFIG.GT_REF_CLK_FREQ {156.25} \
-    CONFIG.INCLUDE_RS_FEC {1} \
+    CONFIG.INCLUDE_RS_FEC {0} \
     CONFIG.INCLUDE_STATISTICS_COUNTERS {1} \
     CONFIG.RX_CHECK_ACK {0} \
     CONFIG.USER_INTERFACE {AXIS} \
