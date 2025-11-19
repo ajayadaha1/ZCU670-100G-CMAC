@@ -56,8 +56,6 @@
 #######################################################
 
 #######################################################
-set_property PACKAGE_PIN K11 [get_ports SI53340_MUX_GT_SEL]
-set_property IOSTANDARD LVCMOS18 [get_ports SI53340_MUX_GT_SEL]
 
 #SFPs two lanes
 #SFP's 
