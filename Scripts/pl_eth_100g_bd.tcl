@@ -2112,7 +2112,7 @@ proc create_hier_cell_other_perph { parentCell nameHier } {
   create_bd_pin -dir O -from 0 -to 0 rx_clk_led
   create_bd_pin -dir I -type clk s_axi_aclk
   create_bd_pin -dir I -from 0 -to 0 -type rst s_axi_aresetn
-  create_bd_pin -dir O -from 0 -to 0 tie_high_o
+
 
   # Create instance: axi_clk_led
   create_hier_cell_axi_clk_led $hier_obj axi_clk_led
@@ -2130,14 +2130,6 @@ proc create_hier_cell_other_perph { parentCell nameHier } {
 
   # Create instance: rx_clk_led
   create_hier_cell_rx_clk_led $hier_obj rx_clk_led
-
-  # Create instance: tie_high, and set properties
-  set tie_high [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 tie_high ]
-  set_property -dict [list \
-    CONFIG.CONST_VAL {0} \
-    CONFIG.CONST_WIDTH {1} \
-  ] $tie_high
-
 
   # Create interface connections
   connect_bd_intf_net -intf_net S_AXI_1 [get_bd_intf_pins S_AXI] [get_bd_intf_pins axi_timer_1/S_AXI]
@@ -2163,8 +2155,7 @@ proc create_hier_cell_other_perph { parentCell nameHier } {
   connect_bd_net -net s_axi_aresetn_1  [get_bd_pins s_axi_aresetn] \
   [get_bd_pins reset_invert_led/Op1] \
   [get_bd_pins axi_timer_1/s_axi_aresetn]
-  connect_bd_net -net tie_high_dout  [get_bd_pins tie_high/dout] \
-  [get_bd_pins tie_high_o]
+
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -2213,7 +2204,6 @@ proc create_root_design { parentCell } {
 
 
   # Create ports
-  set SI53340_MUX_GT_SEL [ create_bd_port -dir O -from 0 -to 0 SI53340_MUX_GT_SEL ]
   set AXI_LITE_CLK_LED [ create_bd_port -dir O -from 0 -to 0 AXI_LITE_CLK_LED ]
   set AXI_LITE_RST_LED [ create_bd_port -dir O AXI_LITE_RST_LED ]
   set RX_CLK_LED [ create_bd_port -dir O -from 0 -to 0 RX_CLK_LED ]
@@ -2265,8 +2255,6 @@ proc create_root_design { parentCell } {
   [get_bd_ports AXI_LITE_RST_LED]
   connect_bd_net -net other_perph_rx_clk_led  [get_bd_pins other_perph/rx_clk_led] \
   [get_bd_ports RX_CLK_LED]
-  connect_bd_net -net other_perph_tie_high_o  [get_bd_pins other_perph/tie_high_o] \
-  [get_bd_ports SI53340_MUX_GT_SEL]
   connect_bd_net -net rx_clk_1  [get_bd_pins cmac/gt_rxusrclk2] \
   [get_bd_pins other_perph/rx_clk] \
   [get_bd_pins other_perph/mgt_clk] \
