@@ -1,7 +1,6 @@
 # ZCU670 100G CAUI-4 v2024.2 with RS-FEC Disabled
 ---
 ## **Design Summary**
----
 This project utilizes 100G CMAC. This has been routed to all 4 SFPs on a ZCU670 board. System is configured to use the ZCU670 si570 at 156.25MHz.
 
 - `end0` is configured as GEM3 routed via RGMII to the on-board PHY.
