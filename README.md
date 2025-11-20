@@ -98,11 +98,14 @@ Accepted connection from 192.168.1.1, port 44704
 ```
 ---
 ## **Known Issues**
+
 Some link partner might require RS-FEC to be enabled. The provided design has RS-FEC enabled. The driver patch does not have RS-FEC enabled, if needed it can be enabled during runtime by writing to register 0x1000 and 0x107c. Please refer to PG203 Chapter 6 - Register Space for more details. 
+
 ---
 
 ### Copyright 2025 AMD-Xilinx Inc.
 ### Copyright (C) 2025, Advanced Micro Devices, Inc.
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
+
 ---
