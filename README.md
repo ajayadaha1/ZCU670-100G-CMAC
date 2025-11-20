@@ -1,24 +1,20 @@
-# ZCU670 100G CAUI-4 v2024.2 With RS-FEC Disabled
-
+# ZCU670 100G CAUI-4 v2024.2 with RS-FEC Disabled
+---
 ## **Design Summary**
-
-This project utilizes 100G CMAC. This has been routed to all 4 SFPs on a ZCU670 board. System is configured to use the ZCu670 si570 at 156.25MHz.
+---
+This project utilizes 100G CMAC. This has been routed to all 4 SFPs on a ZCU670 board. System is configured to use the ZCU670 si570 at 156.25MHz.
 
 - `end0` is configured as GEM3 routed via RGMII to the on-board PHY.
 - `eth0` is configured as 100G Ethernet Subsystem routed to 4xSFPs.
 
 ---
-
 ## **Required Hardware**
-
 - ZCU670
 - 4xSFP supporting 100G CAUI-4
 - 100G capable link partner with RS-FEC disabled
-
 ---
-
 ## **Build Instructions**
-
+---
 ### **Vivado:**
 
 Enter the `Scripts` directory. From the command line run the following:
@@ -51,8 +47,8 @@ directory. To package these images for SD boot, run the following from the `Peta
 Once packaged, the `BOOT.bin` and `image.ub` files (in the `PetaLinux/images/linux` directory) can be copied to an SD card, and used to boot.
 
 ---
-
 ## **Validation**
+---
 ### **Kernel:**
 **NOTE:** The interfaces are assigned as follows:
  - `end0` -> 1G
@@ -107,7 +103,10 @@ Accepted connection from 192.168.1.1, port 44704
 [  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec                  receiver
 ```
 ---
-
 ## **Known Issues**
-
+---
+### Copyright 2025 AMD-Xilinx Inc.
+### Copyright (C) 2025, Advanced Micro Devices, Inc.
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 ---
