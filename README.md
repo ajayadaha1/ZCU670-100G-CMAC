@@ -86,9 +86,7 @@ iperf Done.
 xilinx-zcu670-20242:/home/petalinux#
 
 vck190-1x100g-mrmac:/home/petalinux# iperf3 -s
------------------------------------------------------------
-Server listening on 5201 (test #1)
------------------------------------------------------------
+
 Accepted connection from 192.168.1.1, port 44704
 [  5] local 192.168.1.2 port 5201 connected to 192.168.1.1 port 44720
 [ ID] Interval           Transfer     Bitrate
