@@ -520,7 +520,7 @@ CONFIG_can-utils=y
 #
 # ethtool 
 #
-# CONFIG_ethtool is not set
+CONFIG_ethtool=y
 # CONFIG_ethtool-dev is not set
 # CONFIG_ethtool-dbg is not set
 
@@ -3451,7 +3451,7 @@ CONFIG_bridge-utils=y
 #
 # tcpdump 
 #
-# CONFIG_tcpdump is not set
+CONFIG_tcpdump=y
 # CONFIG_tcpdump-dev is not set
 # CONFIG_tcpdump-dbg is not set
 
