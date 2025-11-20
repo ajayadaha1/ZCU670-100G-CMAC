@@ -4007,6 +4007,7 @@ CONFIG_libdfeprach=y
 CONFIG_librfclk=y
 CONFIG_librfdc=y
 # CONFIG_gpio-demo is not set
+CONFIG_iperf3=y
 # CONFIG_peekpoke is not set
 CONFIG_python3-cffi=y
 CONFIG_python3-pyro4=y
