@@ -70,10 +70,42 @@ round-trip min/avg/max = 0.044/0.056/0.537 ms
 ### **Performance:**
 **NOTE:** These are rough performance numbers - your actual performance may vary based on a variety of factors such as network topology and kernel load.
 
-These performance numbers reflect an MTU of 9000.
+These performance numbers reflect an MTU of 1500.
 ---
+xilinx-zcu670-20242:/home/petalinux# iperf3 -c 192.168.1.2 -i eth0
+Connecting to host 192.168.1.2, port 5201
+[  5] local 192.168.1.1 port 44720 connected to 192.168.1.2 port 5201
+[ ID] Interval           Transfer     Bitrate         Retr  Cwnd
+[  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec    0    259 KBytes
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec    0             sender
+[  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec                  receiver
 
-TODO
+iperf Done.
+xilinx-zcu670-20242:/home/petalinux#
+
+vck190-1x100g-mrmac:/home/petalinux# iperf3 -s
+-----------------------------------------------------------
+Server listening on 5201 (test #1)
+-----------------------------------------------------------
+Accepted connection from 192.168.1.1, port 44704
+[  5] local 192.168.1.2 port 5201 connected to 192.168.1.1 port 44720
+[ ID] Interval           Transfer     Bitrate
+[  5]   0.00-1.00   sec   164 MBytes  1.37 Gbits/sec
+[  5]   1.00-2.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   2.00-3.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   3.00-4.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   4.00-5.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   5.00-6.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   6.00-7.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   7.00-8.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   8.00-9.00   sec   166 MBytes  1.39 Gbits/sec
+[  5]   9.00-10.00  sec   166 MBytes  1.39 Gbits/sec
+[  5]  10.00-10.01  sec  1.75 MBytes  1.41 Gbits/sec
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate
+[  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec                  receiver
 
 ---
 
