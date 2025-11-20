@@ -72,6 +72,7 @@ round-trip min/avg/max = 0.044/0.056/0.537 ms
 
 These performance numbers reflect an MTU of 1500.
 ---
+```
 xilinx-zcu670-20242:/home/petalinux# iperf3 -c 192.168.1.2 -i eth0
 Connecting to host 192.168.1.2, port 5201
 [  5] local 192.168.1.1 port 44720 connected to 192.168.1.2 port 5201
@@ -104,7 +105,7 @@ Accepted connection from 192.168.1.1, port 44704
 - - - - - - - - - - - - - - - - - - - - - - - - -
 [ ID] Interval           Transfer     Bitrate
 [  5]   0.00-10.01  sec  1.62 GBytes  1.39 Gbits/sec                  receiver
-
+```
 ---
 
 ## **Known Issues**
