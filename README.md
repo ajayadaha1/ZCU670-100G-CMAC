@@ -13,7 +13,7 @@ This project utilizes 100G CMAC. This has been routed to all 4 SFPs on a ZCU670 
 
 - ZCU670
 - 4xSFP supporting 100G CAUI-4
-- 100G capable link partner with RS-FEC enabled
+- 100G capable link partner with RS-FEC disabled
 
 ---
 
